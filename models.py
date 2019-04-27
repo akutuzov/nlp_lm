@@ -4,10 +4,10 @@ import json
 import random
 import re
 import sys
-from bounter import bounter
 import pickle
 import numpy as np
 import time
+from collections import Counter
 from keras.utils import to_categorical
 from keras import backend
 from keras.models import Sequential
@@ -49,16 +49,16 @@ class RandomLanguageModel:
 
 class FrequencyLanguageModel:
     def __init__(self):
-        self.vocab = bounter(size_mb=400)
+        self.vocab = Counter()
 
     def train(self, strings):
         for string in strings:
             self.vocab.update(string)
-        print('Vocabulary build:', self.vocab.cardinality(), file=sys.stderr)
+        print('Vocabulary build:', len(self.vocab), file=sys.stderr)
         return self.vocab
 
     def score(self, entity, context):
-        probability = self.vocab[entity] / self.vocab.total()  # Proportional to frequency
+        probability = self.vocab[entity] / sum(self.vocab.values())  # Proportional to frequency
         return probability
 
     def generate(self, context=None):
@@ -74,21 +74,23 @@ class FrequencyLanguageModel:
 
 class MarkovLanguageModel:
     def __init__(self, k=2):
-        self.vocab = bounter(size_mb=400)
+        self.vocab = Counter()
         self.trigrams = {}
         self.k = k
+        self.corpus_size = 0
 
     def train(self, strings):
         for string in strings:
             self.vocab.update(string)
             for nr, token in enumerate(string):
+                self.corpus_size += 1
                 if nr < self.k:
                     continue
                 prev_context = (string[nr - 2], string[nr - 1])
                 if prev_context not in self.trigrams:
-                    self.trigrams[prev_context] = bounter(size_mb=1)
+                    self.trigrams[prev_context] = Counter()
                 self.trigrams[prev_context].update([token])
-        print('Vocabulary built:', self.vocab.cardinality(), file=sys.stderr)
+        print('Vocabulary built:', len(self.vocab), file=sys.stderr)
         print('Trigram model built:', len(self.trigrams), file=sys.stderr)
         return self.vocab, self.trigrams
 
@@ -96,9 +98,9 @@ class MarkovLanguageModel:
         if context in self.trigrams:
             variants = self.trigrams[context]
             if entity in variants:
-                probability = variants[entity] / variants.total()  # Relative to context
+                probability = variants[entity] / sum(variants.values())  # Relative to context
                 return probability
-        probability = self.vocab[entity] / self.vocab.total()  # Proportional to frequency
+        probability = self.vocab[entity] / self.corpus_size  # Proportional to frequency
         return probability
 
     def generate(self, context=None):
@@ -119,23 +121,26 @@ class MarkovLanguageModel:
 
 class RNNLanguageModel:
     def __init__(self, k=2, lstm=32, emb_dim=10):
+        backend.clear_session()
         self.k = k
-        self.vocab = bounter(size_mb=400)
+        self.vocab = Counter()
         self.embed = emb_dim
         self.rnn_size = lstm
         self.word_index = None
         self.model = None
+        self.corpus_size = 0
 
     def train(self, strings):
         for string in strings:
             self.vocab.update(string)
-        print('Vocabulary built:', self.vocab.cardinality(), file=sys.stderr)
-        vocab_size = self.vocab.cardinality()
+        print('Vocabulary built:', len(self.vocab), file=sys.stderr)
+        vocab_size = len(self.vocab)
         self.word_index = list(self.vocab)
 
         sequences = list()
         for string in strings:
             for nr, token in enumerate(string):
+                self.corpus_size += 1
                 if nr < self.k:
                     continue
                 data = [string[nr - 2], string[nr - 1], token]
@@ -179,4 +184,3 @@ class RNNLanguageModel:
     def save(self, filename):
         self.model.save(filename)
         print('Model saved to', filename, file=sys.stderr)
-        backend.clear_session()

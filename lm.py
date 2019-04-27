@@ -1,13 +1,14 @@
 #! python3
 # coding: utf-8
+
 import argparse
-import gzip
+from smart_open import smart_open
 from models import *
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train', '-t', help="Path to training file")
-    parser.add_argument('--model', '-m', default='random',
+    parser.add_argument('--train', '-t', help="Path to training file", required=True)
+    parser.add_argument('--model', '-m', default='random', required=True,
                         choices=['random', 'freq', 'trigram', 'rnn'])
     parser.add_argument('--save', '-s', help='Save model to...')
     args = parser.parse_args()
@@ -27,13 +28,14 @@ if __name__ == "__main__":
         raise ValueError
 
     lines = []  # Training corpus
-    for line in gzip.open(args.train, 'rt'):
+    for line in smart_open(args.train, 'r'):
         res = line.strip() + ' ' + EOL
         lines.append(tokenize(res))
 
     # Training
     model.train(lines)
-    model.save(args.save)
+    if args.save:
+        model.save(args.save)
 
     # Testing
     entropies = []
@@ -50,7 +52,7 @@ if __name__ == "__main__":
 
     perplexities = [2 ** ent for ent in entropies]
 
-    print('Perplexity: {} over {} trigrams'.format(np.mean(perplexities), len(perplexities)))
+    print('Perplexity: {0:.5f} over {1} trigrams'.format(np.mean(perplexities), len(perplexities)))
 
     # Generating...
     while True:
@@ -58,7 +60,7 @@ if __name__ == "__main__":
         print('==============')
         text = text.lower().split()
         print(' '.join(text), end=' ')
-        for i in range(5):
+        for i in range(7):
             prediction = model.generate(context=(text[-2], text[-1]))
             if prediction == EOL:
                 print('\n')
