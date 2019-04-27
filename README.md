@@ -4,19 +4,17 @@ Examples of language modeling approaches (for HSE workshop)
 
 Python version >= 3.6 is required
 
-usage: lm.py [-h] --train TRAIN --model {random,freq,trigram,rnn}
-             [--save SAVE]
+usage: `lm.py [-h] --train TRAIN --model {random,freq,trigram,rnn} [--save SAVE]`
 
 optional arguments:
 
-  -h, --help            show this help message and exit
+  `-h, --help  show this help message and exit`
 
-  --train TRAIN, -t TRAIN
-                        Path to training file (gzipped plain text)
+  `--train TRAIN, -t TRAIN Path to training file (gzipped plain text)`
 
-  --model {random,freq,trigram,rnn}, -m {random,freq,trigram,rnn}
+  `--model {random,freq,trigram,rnn}, -m {random,freq,trigram,rnn}`
 
-  --save SAVE, -s SAVE  Save model to...
+  `--save SAVE, -s SAVE  Save model to...`
 
 *Example*
 
