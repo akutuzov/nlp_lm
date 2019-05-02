@@ -45,12 +45,12 @@ class RandomLanguageModel:
     def save(self, filename):
         out_voc = sorted(list(self.vocab))
         out_voc_serial = json.dumps(out_voc, ensure_ascii=False, indent=4, sort_keys=True)
-        with open(filename, 'w') as out:
+        with smart_open(filename, 'w') as out:
             out.write(out_voc_serial)
 
     def load(self, filename):
-        with smart_open(filename, 'rb') as f:
-            self.vocab = json.loads(f)
+        with smart_open(filename, 'r') as f:
+            self.vocab = json.loads(f.read())
         print('Model loaded from', filename, file=sys.stderr)
 
 
@@ -58,32 +58,34 @@ class FrequencyLanguageModel:
     def __init__(self):
         self.vocab = Counter()
         self.corpus_size = 0
+        self.probs = None
 
     def train(self, strings):
         for string in strings:
             self.vocab.update(string)
         print('Vocabulary build:', len(self.vocab), file=sys.stderr)
         self.corpus_size = sum(self.vocab.values())
+        self.probs = {word: self.vocab[word] / self.corpus_size for word in self.vocab}  # Word probabilities
         return self.vocab
 
     def score(self, entity, context):
-        probability = self.vocab[entity] / self.corpus_size  # Proportional to frequency
+        probability = self.probs[entity]  # Proportional to frequency
         return probability
 
     def generate(self, context=None):
-        words = list(self.vocab)
-        prediction = random.choices(words, weights=[self.vocab[i] for i in words])
-        return prediction[0]
+        words = list(self.probs)
+        probabilities = [self.probs[w] for w in words]
+        prediction = np.random.choice(words, p=probabilities)
+        return prediction
 
     def save(self, filename):
-        out_voc = self.vocab
-        with open(filename, 'wb') as out:
+        out_voc = self.probs
+        with smart_open(filename, 'wb') as out:
             pickle.dump(out_voc, out)
 
     def load(self, filename):
         with smart_open(filename, 'rb') as f:
-            self.vocab = pickle.load(f)
-        self.corpus_size = sum(self.vocab.values())
+            self.probs = pickle.load(f)
         print('Model loaded from', filename, file=sys.stderr)
 
 
@@ -93,6 +95,7 @@ class MarkovLanguageModel:
         self.trigrams = {}
         self.k = k
         self.corpus_size = 0
+        self.probs = None
 
     def train(self, strings):
         for string in strings:
@@ -107,37 +110,41 @@ class MarkovLanguageModel:
                 self.trigrams[prev_context].update([token])
         print('Vocabulary built:', len(self.vocab), file=sys.stderr)
         print('Trigram model built:', len(self.trigrams), file=sys.stderr)
-        return self.vocab, self.trigrams
+        self.probs = {word: self.vocab[word] / self.corpus_size for word in self.vocab}  # Word probabilities
+        return self.vocab, self.trigrams, self.probs
 
     def score(self, entity, context=None):
         if context in self.trigrams:
             variants = self.trigrams[context]
             if entity in variants:
                 probability = variants[entity] / sum(variants.values())  # Relative to context
-                print(entity, probability)
+                # print(entity, probability)
                 return probability
-        probability = self.vocab[entity] / self.corpus_size  # Proportional to frequency
-        print(entity, probability, 'UNKN')
+        probability = self.probs[entity]  # Proportional to frequency
+        # print(entity, probability, 'UNKN')
         return probability
 
     def generate(self, context=None):
         if context in self.trigrams:
             variants = self.trigrams[context]
+            bigram_freq = sum(variants.values())
             words = list(variants)
-            prediction = random.choices(words, weights=[variants[i] for i in words])
+            probabilities = [variants[word] / bigram_freq for word in words]
+            prediction = np.random.choice(words, p=probabilities)
         else:
-            words = list(self.vocab)
-            prediction = random.choices(words, weights=[self.vocab[i] for i in words])
-        return prediction[0]
+            words = list(self.probs)
+            probabilities = [self.probs[w] for w in words]
+            prediction = np.random.choice(words, p=probabilities)
+        return prediction
 
     def save(self, filename):
-        out_dump = [self.vocab, self.trigrams, self.corpus_size]
+        out_dump = [self.probs, self.trigrams, self.corpus_size]
         with smart_open(filename, 'wb') as out:
             pickle.dump(out_dump, out)
 
     def load(self, filename):
         with smart_open(filename, 'rb') as f:
-            self.vocab, self.trigrams, self.corpus_size = pickle.load(f)
+            self.probs, self.trigrams, self.corpus_size = pickle.load(f)
         print('Model loaded from', filename, file=sys.stderr)
 
 

@@ -57,7 +57,7 @@ if __name__ == "__main__":
         print('==============')
         text = text.lower().split()
         print(' '.join(text), end=' ')
-        for i in range(7):
+        for i in range(5):
             prediction = model.generate(context=(text[-2], text[-1]))
             if prediction == EOL:
                 print('\n')
