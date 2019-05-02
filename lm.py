@@ -2,7 +2,6 @@
 # coding: utf-8
 
 import argparse
-from smart_open import smart_open
 from models import *
 
 if __name__ == "__main__":
@@ -32,39 +31,7 @@ if __name__ == "__main__":
         res = line.strip() + ' ' + EOL
         lines.append(tokenize(res))
 
-    # Training
+    print('Training...', file=sys.stderr)
     model.train(lines)
     if args.save:
         model.save(args.save)
-
-    # Testing
-    entropies = []
-    perplexities = []
-
-    for l in lines:
-        for nr, token in enumerate(l):
-            if nr < k:
-                continue
-            probability = model.score(token, context=(l[nr - 2], l[nr - 1]))
-            entropy = - 1 * np.log2(probability)
-            # print(token, probability, entropy)
-            entropies.append(entropy)
-
-    perplexities = [2 ** ent for ent in entropies]
-
-    print('Perplexity: {0:.5f} over {1} trigrams'.format(np.mean(perplexities), len(perplexities)))
-
-    # Generating...
-    while True:
-        text = input('Type any {} words...\n'.format(k))
-        print('==============')
-        text = text.lower().split()
-        print(' '.join(text), end=' ')
-        for i in range(7):
-            prediction = model.generate(context=(text[-2], text[-1]))
-            if prediction == EOL:
-                print('\n')
-            else:
-                print(prediction, end=' ')
-            text = (text[-1], prediction)
-        print('\n==============')

@@ -14,6 +14,8 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
 from keras.layers import Embedding
+from keras.models import load_model
+from smart_open import smart_open
 
 
 def tokenize(string):
@@ -46,19 +48,26 @@ class RandomLanguageModel:
         with open(filename, 'w') as out:
             out.write(out_voc_serial)
 
+    def load(self, filename):
+        with smart_open(filename, 'rb') as f:
+            self.vocab = json.loads(f)
+        print('Model loaded from', filename, file=sys.stderr)
+
 
 class FrequencyLanguageModel:
     def __init__(self):
         self.vocab = Counter()
+        self.corpus_size = 0
 
     def train(self, strings):
         for string in strings:
             self.vocab.update(string)
         print('Vocabulary build:', len(self.vocab), file=sys.stderr)
+        self.corpus_size = sum(self.vocab.values())
         return self.vocab
 
     def score(self, entity, context):
-        probability = self.vocab[entity] / sum(self.vocab.values())  # Proportional to frequency
+        probability = self.vocab[entity] / self.corpus_size  # Proportional to frequency
         return probability
 
     def generate(self, context=None):
@@ -70,6 +79,12 @@ class FrequencyLanguageModel:
         out_voc = self.vocab
         with open(filename, 'wb') as out:
             pickle.dump(out_voc, out)
+
+    def load(self, filename):
+        with smart_open(filename, 'rb') as f:
+            self.vocab = pickle.load(f)
+        self.corpus_size = sum(self.vocab.values())
+        print('Model loaded from', filename, file=sys.stderr)
 
 
 class MarkovLanguageModel:
@@ -99,8 +114,10 @@ class MarkovLanguageModel:
             variants = self.trigrams[context]
             if entity in variants:
                 probability = variants[entity] / sum(variants.values())  # Relative to context
+                print(entity, probability)
                 return probability
         probability = self.vocab[entity] / self.corpus_size  # Proportional to frequency
+        print(entity, probability, 'UNKN')
         return probability
 
     def generate(self, context=None):
@@ -114,9 +131,14 @@ class MarkovLanguageModel:
         return prediction[0]
 
     def save(self, filename):
-        out_voc = self.vocab
-        with open(filename, 'wb') as out:
-            pickle.dump(out_voc, out)
+        out_dump = [self.vocab, self.trigrams, self.corpus_size]
+        with smart_open(filename, 'wb') as out:
+            pickle.dump(out_dump, out)
+
+    def load(self, filename):
+        with smart_open(filename, 'rb') as f:
+            self.vocab, self.trigrams, self.corpus_size = pickle.load(f)
+        print('Model loaded from', filename, file=sys.stderr)
 
 
 class RNNLanguageModel:
@@ -127,6 +149,7 @@ class RNNLanguageModel:
         self.embed = emb_dim
         self.rnn_size = lstm
         self.word_index = None
+        self.inv_index = {}
         self.model = None
         self.corpus_size = 0
 
@@ -136,6 +159,8 @@ class RNNLanguageModel:
         print('Vocabulary built:', len(self.vocab), file=sys.stderr)
         vocab_size = len(self.vocab)
         self.word_index = list(self.vocab)
+        for nr, word in enumerate(self.word_index):
+            self.inv_index[word] = nr
 
         sequences = list()
         for string in strings:
@@ -144,7 +169,7 @@ class RNNLanguageModel:
                 if nr < self.k:
                     continue
                 data = [string[nr - 2], string[nr - 1], token]
-                encoded = [self.word_index.index(w) for w in data]
+                encoded = [self.inv_index[w] for w in data]
                 sequences.append(encoded)
         print('Total sequences to train on:', len(sequences), file=sys.stderr)
         sequences = np.array(sequences)
@@ -166,21 +191,39 @@ class RNNLanguageModel:
         # Training:
         val_split = 0.1
         start = time.time()
-        history = self.model.fit(contexts, words, epochs=5, verbose=1, validation_split=val_split)
+        history = self.model.fit(contexts, words, epochs=10, verbose=1, validation_split=val_split)
         end = time.time()
         training_time = int(end - start)
-        print('Training took {} seconds'.format(training_time), file=sys.stderr)
+        print('LSTM training took {} seconds'.format(training_time), file=sys.stderr)
 
         return self.vocab
 
     def score(self, entity, context=None):
-        # model.predict_classes
-        raise NotImplemented
+        entity_id = self.inv_index[entity]
+        context_ids = np.array([[self.inv_index[w] for w in context]])
+        prediction = self.model.predict(context_ids).ravel()
+        probability = prediction[entity_id]
+        return probability
 
     def generate(self, context=None):
-        # model.predict_classes
-        raise NotImplemented
+        context_ids = np.array([[self.inv_index[w] for w in context]])
+        prediction = self.model.predict(context_ids).ravel()
+        word_id = prediction.argmax()
+        word = self.word_index[word_id]
+        return word
 
     def save(self, filename):
         self.model.save(filename)
-        print('Model saved to', filename, file=sys.stderr)
+        out_dump = self.inv_index
+        with smart_open(filename.split('.')[0] + '.json.gz', 'wb') as out:
+            pickle.dump(out_dump, out)
+        print('Model saved to {} and {} (vocabulary)'.format(filename, filename.split('.')[0] +
+                                                             '.json'), file=sys.stderr)
+
+    def load(self, filename):
+        self.model = load_model(filename)
+        voc_file = filename.split('.')[0] + '.json.gz'
+        with smart_open(voc_file, 'rb') as f:
+            self.inv_index = pickle.load(f)
+        self.word_index = sorted(self.inv_index, key=self.inv_index.get)
+        print('Model loaded from {} and {}'.format(filename, voc_file), file=sys.stderr)
