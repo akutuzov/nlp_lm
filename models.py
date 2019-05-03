@@ -15,6 +15,7 @@ from keras.layers import Dense
 from keras.layers import LSTM
 from keras.layers import Embedding
 from keras.models import load_model
+from keras.callbacks import TensorBoard, EarlyStopping
 from smart_open import smart_open
 
 
@@ -195,10 +196,12 @@ class RNNLanguageModel:
         # Model compilation:
         self.model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
+        loss_plot = TensorBoard(log_dir='logs/LSTM')
+
         # Training:
-        val_split = 0.1
+        val_split = 0.05
         start = time.time()
-        history = self.model.fit(contexts, words, epochs=10, verbose=1, validation_split=val_split)
+        history = self.model.fit(contexts, words, epochs=10, verbose=2, validation_split=val_split, callbacks=[loss_plot])
         end = time.time()
         training_time = int(end - start)
         print('LSTM training took {} seconds'.format(training_time), file=sys.stderr)
