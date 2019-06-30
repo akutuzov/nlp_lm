@@ -1,8 +1,8 @@
 # NLP through language modeling
 
-Examples of language modeling approaches (for HSE workshop)
+Examples of language modeling approaches
 
-Python version >= 3.6 is required
+Python version >= 3.5 is required
 
 # Training models
 
@@ -20,7 +20,7 @@ optional arguments:
 
 *Example*
 
-`python3.6 lm.py -t my_corpus.txt.gz -m rnn -s model.h5`
+`python3 lm.py -t my_corpus.txt.gz -m rnn -s model.h5`
 
 # Testing models
 
