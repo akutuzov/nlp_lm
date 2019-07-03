@@ -46,11 +46,11 @@ class RandomLanguageModel:
     def save(self, filename):
         out_voc = sorted(list(self.vocab))
         out_voc_serial = json.dumps(out_voc, ensure_ascii=False, indent=4, sort_keys=True)
-        with smart_open(filename, 'w') as out:
+        with open(filename, 'w') as out:
             out.write(out_voc_serial)
 
     def load(self, filename):
-        with smart_open(filename, 'r') as f:
+        with open(filename, 'r') as f:
             self.vocab = json.loads(f.read())
         print('Model loaded from', filename, file=sys.stderr)
 
@@ -66,7 +66,8 @@ class FrequencyLanguageModel:
             self.vocab.update(string)
         print('Vocabulary build:', len(self.vocab), file=sys.stderr)
         self.corpus_size = sum(self.vocab.values())
-        self.probs = {word: self.vocab[word] / self.corpus_size for word in self.vocab}  # Word probabilities
+        # Word probabilities:
+        self.probs = {word: self.vocab[word] / self.corpus_size for word in self.vocab}
         return self.vocab
 
     def score(self, entity, context):
@@ -81,11 +82,11 @@ class FrequencyLanguageModel:
 
     def save(self, filename):
         out_voc = self.probs
-        with smart_open(filename, 'wb') as out:
+        with open(filename, 'wb') as out:
             pickle.dump(out_voc, out)
 
     def load(self, filename):
-        with smart_open(filename, 'rb') as f:
+        with open(filename, 'rb') as f:
             self.probs = pickle.load(f)
         print('Model loaded from', filename, file=sys.stderr)
 
@@ -111,7 +112,8 @@ class MarkovLanguageModel:
                 self.trigrams[prev_context].update([token])
         print('Vocabulary built:', len(self.vocab), file=sys.stderr)
         print('Trigram model built:', len(self.trigrams), file=sys.stderr)
-        self.probs = {word: self.vocab[word] / self.corpus_size for word in self.vocab}  # Word probabilities
+        # Word probabilities:
+        self.probs = {word: self.vocab[word] / self.corpus_size for word in self.vocab}
         return self.vocab, self.trigrams, self.probs
 
     def score(self, entity, context=None):
@@ -140,11 +142,11 @@ class MarkovLanguageModel:
 
     def save(self, filename):
         out_dump = [self.probs, self.trigrams, self.corpus_size]
-        with smart_open(filename, 'wb') as out:
+        with open(filename, 'wb') as out:
             pickle.dump(out_dump, out)
 
     def load(self, filename):
-        with smart_open(filename, 'rb') as f:
+        with open(filename, 'rb') as f:
             self.probs, self.trigrams, self.corpus_size = pickle.load(f)
         print('Model loaded from', filename, file=sys.stderr)
 
@@ -201,7 +203,8 @@ class RNNLanguageModel:
         # Training:
         val_split = 0.05
         start = time.time()
-        history = self.model.fit(contexts, words, epochs=10, verbose=2, validation_split=val_split, callbacks=[loss_plot])
+        history = self.model.fit(contexts, words, epochs=10, verbose=2, validation_split=val_split,
+                                 callbacks=[loss_plot])
         end = time.time()
         training_time = int(end - start)
         print('LSTM training took {} seconds'.format(training_time), file=sys.stderr)
@@ -225,7 +228,7 @@ class RNNLanguageModel:
     def save(self, filename):
         self.model.save(filename)
         out_dump = self.inv_index
-        with smart_open(filename.split('.')[0] + '.json.gz', 'wb') as out:
+        with open(filename.split('.')[0] + '.json.gz', 'wb') as out:
             pickle.dump(out_dump, out)
         print('Model saved to {} and {} (vocabulary)'.format(filename, filename.split('.')[0] +
                                                              '.json'), file=sys.stderr)
@@ -233,7 +236,7 @@ class RNNLanguageModel:
     def load(self, filename):
         self.model = load_model(filename)
         voc_file = filename.split('.')[0] + '.json.gz'
-        with smart_open(voc_file, 'rb') as f:
+        with open(voc_file, 'rb') as f:
             self.inv_index = pickle.load(f)
         self.word_index = sorted(self.inv_index, key=self.inv_index.get)
         print('Model loaded from {} and {}'.format(filename, voc_file), file=sys.stderr)

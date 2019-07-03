@@ -6,7 +6,7 @@ Python version >= 3.5 is required
 
 # Cleaning the corpus
 
-`zcat corpus.txt.gz | python 3 filter.py | gzip > cleaned_corpus.txt.gz `
+`zcat corpus.txt.gz | python3 filter.py | gzip > cleaned_corpus.txt.gz `
 
 # Training models
 
