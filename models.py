@@ -111,7 +111,7 @@ class MarkovLanguageModel:
                     self.trigrams[prev_context] = Counter()
                 self.trigrams[prev_context].update([token])
         print('Vocabulary built:', len(self.vocab), file=sys.stderr)
-        print('Trigram model built:', len(self.trigrams), file=sys.stderr)
+        print('Trigram model built:', len(self.trigrams), 'trigrams', file=sys.stderr)
         # Word probabilities:
         self.probs = {word: self.vocab[word] / self.corpus_size for word in self.vocab}
         return self.vocab, self.trigrams, self.probs
