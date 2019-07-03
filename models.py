@@ -16,7 +16,7 @@ from keras.layers import LSTM
 from keras.layers import Embedding
 from keras.models import load_model
 from keras.callbacks import TensorBoard, EarlyStopping
-from smart_open import smart_open
+from smart_open import open
 
 
 def tokenize(string):

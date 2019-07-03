@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     print('Loading test corpus...', file=sys.stderr)
     lines = []
-    for line in smart_open(args.test, 'r'):
+    for line in open(args.test, 'r'):
         res = line.strip() + ' ' + EOL
         lines.append(tokenize(res))
 
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     print('Perplexity: {0:.5f} over {1} running trigrams'.format(np.mean(perplexities),
                                                                  len(perplexities)))
 
-    # Generating...
+    # Generating text...
     while True:
         text = input('Type any {} words...\n'.format(k))
         print('==============')

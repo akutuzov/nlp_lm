@@ -4,9 +4,13 @@ Examples of language modeling approaches
 
 Python version >= 3.5 is required
 
+# Cleaning the corpus
+
+`zcat corpus.txt.gz | python 3 filter.py | gzip > cleaned_corpus.txt.gz `
+
 # Training models
 
-usage: `lm.py [-h] --train TRAIN --model {random,freq,trigram,rnn} [--save SAVE]`
+usage: `train_lm.py [-h] --train TRAIN --model {random,freq,trigram,rnn} [--save SAVE]`
 
 optional arguments:
 
@@ -20,7 +24,7 @@ optional arguments:
 
 *Example*
 
-`python3 lm.py -t my_corpus.txt.gz -m rnn -s model.h5`
+`python3 train_lm.py -t cleaned_corpus.txt.gz -m rnn -s model.h5`
 
 # Testing models
 

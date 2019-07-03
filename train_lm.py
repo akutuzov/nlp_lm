@@ -7,13 +7,15 @@ from models import *
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--train', '-t', help="Path to training file", required=True)
+    parser.add_argument('--ngrams', '-k', help="Number of context words to consider",
+                        type=int, default=2)
     parser.add_argument('--model', '-m', default='random', required=True,
                         choices=['random', 'freq', 'trigram', 'rnn'])
-    parser.add_argument('--save', '-s', help='Save model to...')
+    parser.add_argument('--save', '-s', help='Save model to (filename)...')
     args = parser.parse_args()
 
     EOL = 'endofline'
-    k = 2
+    k = args.ngrams
 
     if args.model == 'random':
         model = RandomLanguageModel()
@@ -27,7 +29,7 @@ if __name__ == "__main__":
         raise ValueError
 
     lines = []  # Training corpus
-    for line in smart_open(args.train, 'r'):
+    for line in open(args.train, 'r'):
         res = line.strip() + ' ' + EOL
         lines.append(tokenize(res))
 
