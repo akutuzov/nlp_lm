@@ -14,8 +14,13 @@ if __name__ == "__main__":
     parser.add_argument('--save', '-s', help='Save model to (filename)...')
     args = parser.parse_args()
 
-    EOL = 'endofline'
+    EOL = 'endofline'  # Special token for line breaks
     k = args.ngrams
+
+    lines = []  # Training corpus
+    for line in open(args.train, 'r'):
+        res = line.strip() + ' ' + EOL
+        lines.append(tokenize(res))
 
     if args.model == 'random':
         model = RandomLanguageModel()
@@ -27,11 +32,6 @@ if __name__ == "__main__":
         model = RNNLanguageModel(k=k)
     else:
         raise ValueError
-
-    lines = []  # Training corpus
-    for line in open(args.train, 'r'):
-        res = line.strip() + ' ' + EOL
-        lines.append(tokenize(res))
 
     print('Training...', file=sys.stderr)
     model.train(lines)

@@ -15,7 +15,7 @@ from keras.layers import Dense
 from keras.layers import LSTM
 from keras.layers import Embedding
 from keras.models import load_model
-from keras.callbacks import TensorBoard, EarlyStopping
+from keras.callbacks import TensorBoard
 from smart_open import open
 
 
@@ -28,6 +28,7 @@ def tokenize(string):
 class RandomLanguageModel:
     def __init__(self):
         self.vocab = set()
+        self.uniform_probability = None
 
     def train(self, strings):
         for string in strings:
@@ -36,10 +37,17 @@ class RandomLanguageModel:
         return self.vocab
 
     def score(self, entity, context):
-        probability = 1 / len(self.vocab)  # branching factor
+        # We ignore context here
+        if entity in self.vocab:
+            probability = self.uniform_probability    # branching factor
+
+        # Decreased probability for out-of-vocabulary words:
+        else:
+            probability = 0.99 / len(self.vocab)
         return probability
 
     def generate(self, context=None):
+        # We ignore context here
         prediction = random.sample(self.vocab, k=1)
         return prediction[0]
 
@@ -51,7 +59,8 @@ class RandomLanguageModel:
 
     def load(self, filename):
         with open(filename, 'r') as f:
-            self.vocab = json.loads(f.read())
+            self.vocab = set(json.loads(f.read()))
+            self.uniform_probability = 1 / len(self.vocab)
         print('Model loaded from', filename, file=sys.stderr)
 
 
@@ -71,23 +80,29 @@ class FrequencyLanguageModel:
         return self.vocab
 
     def score(self, entity, context):
-        probability = self.probs[entity]  # Proportional to frequency
+        # We ignore context here
+        if entity in self.probs:
+            probability = self.probs[entity]  # Proportional to frequency
+        # Decreased probability for out-of-vocabulary words:
+        else:
+            probability = 0.99 / self.corpus_size
         return probability
 
     def generate(self, context=None):
+        # We ignore context here
         words = list(self.probs)
         probabilities = [self.probs[w] for w in words]
         prediction = np.random.choice(words, p=probabilities)
         return prediction
 
     def save(self, filename):
-        out_voc = self.probs
+        out_voc = [self.probs, self.corpus_size]
         with open(filename, 'wb') as out:
             pickle.dump(out_voc, out)
 
     def load(self, filename):
         with open(filename, 'rb') as f:
-            self.probs = pickle.load(f)
+            self.probs, self.corpus_size = pickle.load(f)
         print('Model loaded from', filename, file=sys.stderr)
 
 
@@ -111,9 +126,9 @@ class MarkovLanguageModel:
                     self.trigrams[prev_context] = Counter()
                 self.trigrams[prev_context].update([token])
         print('Vocabulary built:', len(self.vocab), file=sys.stderr)
-        print('Trigram model built:', len(self.trigrams), 'trigrams', file=sys.stderr)
         # Word probabilities:
         self.probs = {word: self.vocab[word] / self.corpus_size for word in self.vocab}
+        print('Trigram model built:', len(self.trigrams), 'trigrams', file=sys.stderr)
         return self.vocab, self.trigrams, self.probs
 
     def score(self, entity, context=None):
@@ -123,8 +138,12 @@ class MarkovLanguageModel:
                 probability = variants[entity] / sum(variants.values())  # Relative to context
                 # print(entity, probability)
                 return probability
-        probability = self.probs[entity]  # Proportional to frequency
-        # print(entity, probability, 'UNKN')
+        if entity in self.probs:
+            probability = self.probs[entity]  # Proportional to frequency
+        # Decreased probability for out-of-vocabulary words:
+        else:
+            probability = 0.99 / self.corpus_size
+            # print(entity, probability, 'UNKN')
         return probability
 
     def generate(self, context=None):
@@ -141,6 +160,7 @@ class MarkovLanguageModel:
         return prediction
 
     def save(self, filename):
+        print('Saving the model to', filename, file=sys.stderr)
         out_dump = [self.probs, self.trigrams, self.corpus_size]
         with open(filename, 'wb') as out:
             pickle.dump(out_dump, out)
@@ -193,7 +213,7 @@ class RNNLanguageModel:
         self.model.add(Embedding(vocab_size, self.embed, input_length=self.k, name='embeddings'))
         self.model.add(LSTM(self.rnn_size, name='LSTM'))
         self.model.add(Dense(vocab_size, activation='softmax', name='output'))
-        print(self.model.summary())
+        print(self.model.summary(), file=sys.stderr)
 
         # Model compilation:
         self.model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -209,11 +229,18 @@ class RNNLanguageModel:
         training_time = int(end - start)
         print('LSTM training took {} seconds'.format(training_time), file=sys.stderr)
 
+        self.model.corpus_size = self.corpus_size
+
         return self.vocab
 
     def score(self, entity, context=None):
-        entity_id = self.inv_index[entity]
-        context_ids = np.array([[self.inv_index[w] for w in context]])
+        if entity in self.inv_index and all([word in self.inv_index for word in context]):
+            entity_id = self.inv_index[entity]
+            context_ids = np.array([[self.inv_index[w] for w in context]])
+        # Decreased probability for out-of-vocabulary words:
+        else:
+            return 0.5 / self.model.corpus_size
+
         prediction = self.model.predict(context_ids).ravel()
         probability = prediction[entity_id]
         return probability

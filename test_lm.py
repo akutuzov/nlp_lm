@@ -12,7 +12,14 @@ if __name__ == "__main__":
     parser.add_argument('--modelfile', '-mf', required=True, help='File name')
     args = parser.parse_args()
 
-    EOL = 'endofline'
+    EOL = 'endofline'  # Special token for line breaks
+
+    print('Loading test corpus...', file=sys.stderr)
+    lines = []
+    for line in open(args.test, 'r'):
+        res = line.strip() + ' ' + EOL
+        lines.append(tokenize(res))
+
     k = 2
 
     if args.model == 'random':
@@ -26,13 +33,7 @@ if __name__ == "__main__":
     else:
         raise ValueError
 
-    model.load(args.modelfile)
-
-    print('Loading test corpus...', file=sys.stderr)
-    lines = []
-    for line in open(args.test, 'r'):
-        res = line.strip() + ' ' + EOL
-        lines.append(tokenize(res))
+    model.load(args.modelfile)  # Loading the model from file
 
     print('Testing...', file=sys.stderr)
     entropies = []
@@ -42,10 +43,10 @@ if __name__ == "__main__":
         for nr, token in enumerate(l):
             if nr < k:
                 continue
+            # Model prediction:
             probability = model.score(token, context=(l[nr - 2], l[nr - 1]))
             entropy = - 1 * np.log2(probability)
             entropies.append(entropy)
-
     perplexities = [2 ** ent for ent in entropies]
 
     print('Perplexity: {0:.5f} over {1} running trigrams'.format(np.mean(perplexities),
