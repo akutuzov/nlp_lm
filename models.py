@@ -191,7 +191,7 @@ class RNNLanguageModel:
     as a classification task (choose from all the words in the vocabulary).
     """
 
-    def __init__(self, k=2, lstm=16, emb_dim=5, batch_size=16):
+    def __init__(self, k=2, lstm=16, emb_dim=5, batch_size=8):
         backend.clear_session()
         self.k = k
         self.vocab = Counter()
@@ -223,10 +223,6 @@ class RNNLanguageModel:
                 sequences.append(encoded)
         print('Total sequences to train on:', len(sequences), file=sys.stderr)
         sequences = np.array(sequences)
-
-        # Separating input from output:
-        # contexts, words = sequences[:, :-1], sequences[:, -1]
-        # words = to_categorical(words, num_classes=vocab_size)
 
         # Describe the model architecture
         self.model = Sequential()
@@ -308,10 +304,13 @@ class RNNLanguageModel:
         return probability
 
     def generate(self, context=None):
-        context_ids = np.array([[self.inv_index[w] for w in context]])
-        prediction = self.model.predict(context_ids).ravel()
-        word_id = prediction.argmax()
-        word = self.word_index[word_id]
+        if all([word in self.inv_index for word in context]):
+            context_ids = np.array([[self.inv_index[w] for w in context]])
+            prediction = self.model.predict(context_ids).ravel()
+            word_id = prediction.argmax()
+            word = self.word_index[word_id]
+        else:
+            word = np.random.choice(self.word_index)
         return word
 
     def save(self, filename):
