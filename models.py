@@ -15,7 +15,7 @@ from keras.layers import Dense
 from keras.layers import LSTM
 from keras.layers import Embedding
 from keras.models import load_model
-from keras.callbacks import TensorBoard
+from keras.callbacks import TensorBoard, EarlyStopping
 from smart_open import open
 
 
@@ -26,6 +26,10 @@ def tokenize(string):
 
 
 class RandomLanguageModel:
+    """
+    This model guesses the next word randomly (from the corpus-based dictionary)
+    """
+
     def __init__(self):
         self.vocab = set()
         self.uniform_probability = None
@@ -39,7 +43,7 @@ class RandomLanguageModel:
     def score(self, entity, context):
         # We ignore context here
         if entity in self.vocab:
-            probability = self.uniform_probability    # branching factor
+            probability = self.uniform_probability  # branching factor
 
         # Decreased probability for out-of-vocabulary words:
         else:
@@ -65,6 +69,11 @@ class RandomLanguageModel:
 
 
 class FrequencyLanguageModel:
+    """
+    This model predicts the next word randomly from the corpus-based dictionary,
+    with words' probabilities proportional to their corpus frequencies.
+    """
+
     def __init__(self):
         self.vocab = Counter()
         self.corpus_size = 0
@@ -107,6 +116,11 @@ class FrequencyLanguageModel:
 
 
 class MarkovLanguageModel:
+    """
+    This model predicts the next word based on tri-gram statistics from the corpus
+    (so it finally uses the context).
+    """
+
     def __init__(self, k=2):
         self.vocab = Counter()
         self.trigrams = {}
@@ -172,7 +186,12 @@ class MarkovLanguageModel:
 
 
 class RNNLanguageModel:
-    def __init__(self, k=2, lstm=32, emb_dim=10):
+    """
+    This model trains a simple LSTM on the training corpus and casts the next word prediction
+    as a classification task (choose from all the words in the vocabulary).
+    """
+
+    def __init__(self, k=2, lstm=16, emb_dim=5, batch_size=16):
         backend.clear_session()
         self.k = k
         self.vocab = Counter()
@@ -182,6 +201,7 @@ class RNNLanguageModel:
         self.inv_index = {}
         self.model = None
         self.corpus_size = 0
+        self.batch_size = batch_size
 
     def train(self, strings):
         for string in strings:
@@ -205,8 +225,8 @@ class RNNLanguageModel:
         sequences = np.array(sequences)
 
         # Separating input from output:
-        contexts, words = sequences[:, :-1], sequences[:, -1]
-        words = to_categorical(words, num_classes=vocab_size)
+        # contexts, words = sequences[:, :-1], sequences[:, -1]
+        # words = to_categorical(words, num_classes=vocab_size)
 
         # Describe the model architecture
         self.model = Sequential()
@@ -219,12 +239,32 @@ class RNNLanguageModel:
         self.model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
         loss_plot = TensorBoard(log_dir='logs/LSTM')
+        earlystopping = EarlyStopping(monitor='val_acc', min_delta=0.001, patience=2, verbose=1)
+
+        # We are using the last lines of the corpus as a validation set:
+        val_split = 0.05
+        train_data_len = int(len(sequences) * (1 - val_split))
+        val_data_len = int(len(sequences) * val_split)
+
+        train_data = sequences[:train_data_len, :]
+        val_data = sequences[-val_data_len:, :]
+
+        print('Training on:', train_data_len, file=sys.stderr)
+        print('Validating on:', val_data_len, file=sys.stderr)
+
+        val_contexts, val_words = val_data[:, :-1], val_data[:, -1]
+        val_words = to_categorical(val_words, num_classes=vocab_size)
+        val_data = val_contexts, val_words
+
+        # How many times per epoch we will ask the batch generator to yield a batch?
+        steps = train_data_len / self.batch_size
+        print('Steps:', int(steps), file=sys.stderr)
 
         # Training:
-        val_split = 0.05
         start = time.time()
-        history = self.model.fit(contexts, words, epochs=10, verbose=2, validation_split=val_split,
-                                 callbacks=[loss_plot])
+        history = self.model.fit_generator(self.batch_generator(
+            train_data, vocab_size, self.batch_size), steps_per_epoch=steps, epochs=10,
+            verbose=1, callbacks=[loss_plot, earlystopping], validation_data=val_data)
         end = time.time()
         training_time = int(end - start)
         print('LSTM training took {} seconds'.format(training_time), file=sys.stderr)
@@ -233,13 +273,35 @@ class RNNLanguageModel:
 
         return self.vocab
 
+    def batch_generator(self, data, vocab_size, batch_size):
+        """
+        Generates training batches
+        """
+
+        while True:
+            # Separating input from output:
+            contexts = np.empty((batch_size, self.k), dtype=int)
+            words = np.empty((batch_size, vocab_size), dtype=int)
+            inst_counter = 0
+            for row in data:
+                context, word = row[:-1], row[-1]
+                word = to_categorical(word, num_classes=vocab_size)
+                contexts[inst_counter] = context
+                words[inst_counter] = word
+                inst_counter += 1
+                if inst_counter == batch_size:
+                    yield (contexts, words)
+                    contexts = np.empty((batch_size, self.k))
+                    words = np.empty((batch_size, vocab_size))
+                    inst_counter = 0
+
     def score(self, entity, context=None):
         if entity in self.inv_index and all([word in self.inv_index for word in context]):
             entity_id = self.inv_index[entity]
             context_ids = np.array([[self.inv_index[w] for w in context]])
         # Decreased probability for out-of-vocabulary words:
         else:
-            return 0.5 / self.model.corpus_size
+            return 0.99 / self.model.corpus_size
 
         prediction = self.model.predict(context_ids).ravel()
         probability = prediction[entity_id]
@@ -255,14 +317,14 @@ class RNNLanguageModel:
     def save(self, filename):
         self.model.save(filename)
         out_dump = self.inv_index
-        with open(filename.split('.')[0] + '.json.gz', 'wb') as out:
+        with open(filename.split('.')[0] + '.pickle.gz', 'wb') as out:
             pickle.dump(out_dump, out)
         print('Model saved to {} and {} (vocabulary)'.format(filename, filename.split('.')[0] +
-                                                             '.json'), file=sys.stderr)
+                                                             '.pickle.gz'), file=sys.stderr)
 
     def load(self, filename):
         self.model = load_model(filename)
-        voc_file = filename.split('.')[0] + '.json.gz'
+        voc_file = filename.split('.')[0] + '.pickle.gz'
         with open(voc_file, 'rb') as f:
             self.inv_index = pickle.load(f)
         self.word_index = sorted(self.inv_index, key=self.inv_index.get)

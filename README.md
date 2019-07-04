@@ -6,8 +6,8 @@ Python version >= 3.5 is required
 
 # Cleaning the corpus
 
-`python3 filter.py -c CORPUS_FILE -o CLEANED_CORPUS_FILE
-`
+`python3 filter.py -c CORPUS_FILE -o CLEANED_CORPUS_FILE`
+
 # Training models
 
 usage: `train_lm.py [-h] --train TRAIN --model {random,freq,trigram,rnn} [--save SAVE]`
