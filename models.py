@@ -265,8 +265,6 @@ class RNNLanguageModel:
         training_time = int(end - start)
         print('LSTM training took {} seconds'.format(training_time), file=sys.stderr)
 
-        self.model.corpus_size = self.corpus_size
-
         return self.vocab
 
     def batch_generator(self, data, vocab_size, batch_size):
@@ -297,7 +295,7 @@ class RNNLanguageModel:
             context_ids = np.array([[self.inv_index[w] for w in context]])
         # Decreased probability for out-of-vocabulary words:
         else:
-            return 0.99 / self.model.corpus_size
+            return 0.99 / self.corpus_size
 
         prediction = self.model.predict(context_ids).ravel()
         probability = prediction[entity_id]
@@ -315,7 +313,7 @@ class RNNLanguageModel:
 
     def save(self, filename):
         self.model.save(filename)
-        out_dump = self.inv_index
+        out_dump = [self.inv_index, self.corpus_size]
         with open(filename.split('.')[0] + '.pickle.gz', 'wb') as out:
             pickle.dump(out_dump, out)
         print('Model saved to {} and {} (vocabulary)'.format(filename, filename.split('.')[0] +
@@ -325,6 +323,6 @@ class RNNLanguageModel:
         self.model = load_model(filename)
         voc_file = filename.split('.')[0] + '.pickle.gz'
         with open(voc_file, 'rb') as f:
-            self.inv_index = pickle.load(f)
+            self.inv_index, self.corpus_size = pickle.load(f)
         self.word_index = sorted(self.inv_index, key=self.inv_index.get)
         print('Model loaded from {} and {}'.format(filename, voc_file), file=sys.stderr)
