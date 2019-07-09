@@ -44,7 +44,8 @@ if __name__ == "__main__":
             if nr < k:
                 continue
             # Model prediction:
-            probability = model.score(token, context=(l[nr - 2], l[nr - 1]))
+            context = (l[nr - 2], l[nr - 1])
+            probability = model.score(token, context=context)
             entropy = - 1 * np.log2(probability)
             entropies.append(entropy)
     perplexities = [2 ** ent for ent in entropies]
