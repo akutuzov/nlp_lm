@@ -191,7 +191,7 @@ class RNNLanguageModel:
     as a classification task (choose from all the words in the vocabulary).
     """
 
-    def __init__(self, k=2, lstm=16, emb_dim=5, batch_size=8):
+    def __init__(self, k=2, lstm=16, emb_dim=5, batch_size=8, mincount=None):
         backend.clear_session()
         self.k = k
         self.vocab = Counter()
@@ -202,10 +202,14 @@ class RNNLanguageModel:
         self.model = None
         self.corpus_size = 0
         self.batch_size = batch_size
+        self.mincount = mincount
 
     def train(self, strings):
         for string in strings:
             self.vocab.update(string)
+        if self.mincount:
+            self.vocab = {word: self.vocab[word] for word in self.vocab
+                          if self.vocab[word] >= self.mincount}
         print('Vocabulary built:', len(self.vocab), file=sys.stderr)
         vocab_size = len(self.vocab)
         self.word_index = list(self.vocab)
@@ -219,8 +223,9 @@ class RNNLanguageModel:
                 if nr < self.k:
                     continue
                 data = [string[nr - 2], string[nr - 1], token]
-                encoded = [self.inv_index[w] for w in data]
-                sequences.append(encoded)
+                if all([word in self.inv_index for word in data]):
+                    encoded = [self.inv_index[w] for w in data]
+                    sequences.append(encoded)
         print('Total sequences to train on:', len(sequences), file=sys.stderr)
         sequences = np.array(sequences)
 
@@ -295,7 +300,7 @@ class RNNLanguageModel:
             context_ids = np.array([[self.inv_index[w] for w in context]])
         # Decreased probability for out-of-vocabulary words:
         else:
-            return 0.99 / self.corpus_size
+            return 1 / self.corpus_size
 
         prediction = self.model.predict(context_ids).ravel()
         probability = prediction[entity_id]
@@ -326,3 +331,4 @@ class RNNLanguageModel:
             self.inv_index, self.corpus_size = pickle.load(f)
         self.word_index = sorted(self.inv_index, key=self.inv_index.get)
         print('Model loaded from {} and {}'.format(filename, voc_file), file=sys.stderr)
+        print(self.model.summary(), file=sys.stderr)

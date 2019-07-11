@@ -12,13 +12,13 @@ Python version >= 3.5 is required
 
 usage: `train_lm.py [-h] --train TRAIN --model {random,freq,trigram,rnn} [--save SAVE]`
 
-optional arguments:
-
-  `-h, --help  show this help message and exit`
-
   `--train TRAIN, -t TRAIN Path to training file (plain text)`
 
   `--model {random,freq,trigram,rnn}, -m {random,freq,trigram,rnn}`
+
+optional arguments:
+
+  `-h, --help  show this help message and exit`
 
   `--save SAVE, -s SAVE  Save model to...`
 
@@ -30,14 +30,15 @@ optional arguments:
 
 usage: `test_lm.py [-h] --test TEST --model {random,freq,trigram,rnn} --modelfile MODELFILE`
 
-optional arguments:
-  `-h, --help            show this help message and exit`
-  
   `--test TEST, -t TEST  Path to testing file (plain text)`
   
   `--model {random,freq,trigram,rnn}, -m {random,freq,trigram,rnn}`
   
   `--modelfile MODELFILE, -mf MODELFILE File name`
+
+optional arguments:
+  `-h, --help            show this help message and exit`
+  
 
 
 More corpora and a non-lemmatized word embedding model for Russian can be found at: 

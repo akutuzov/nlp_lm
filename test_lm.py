@@ -29,7 +29,7 @@ if __name__ == "__main__":
     elif args.model == 'trigram':
         model = MarkovLanguageModel(k=k)
     elif args.model == 'rnn':
-        model = RNNLanguageModel(k=k)
+        model = RNNLanguageModel(k=k, mincount=2)
     else:
         raise ValueError
 
@@ -60,7 +60,11 @@ if __name__ == "__main__":
         text = text.lower().split()
         print(' '.join(text), end=' ')
         for i in range(5):
-            prediction = model.generate(context=(text[-2], text[-1]))
+            try:
+                prediction = model.generate(context=(text[-2], text[-1]))
+            except IndexError:
+                print('Error!')
+                continue
             if prediction == EOL:
                 print('\n')
             else:

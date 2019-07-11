@@ -29,7 +29,7 @@ if __name__ == "__main__":
     elif args.model == 'trigram':
         model = MarkovLanguageModel(k=k)
     elif args.model == 'rnn':
-        model = RNNLanguageModel(k=k)
+        model = RNNLanguageModel(k=k, mincount=2)
     else:
         raise ValueError
 
