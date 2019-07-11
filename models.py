@@ -17,6 +17,7 @@ from keras.layers import Embedding
 from keras.models import load_model
 from keras.callbacks import TensorBoard, EarlyStopping
 from smart_open import open
+import logging
 
 
 def tokenize(string):
@@ -193,6 +194,7 @@ class RNNLanguageModel:
 
     def __init__(self, k=2, lstm=16, emb_dim=5, batch_size=8, mincount=None):
         backend.clear_session()
+        logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
         self.k = k
         self.vocab = Counter()
         self.embed = emb_dim
