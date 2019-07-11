@@ -7,6 +7,7 @@ from models import *
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--train', '-t', help="Path to training file", required=True)
+    parser.add_argument('--embeddings', '-e', help="Path to external embeddings file")
     parser.add_argument('--ngrams', '-k', help="Number of context words to consider",
                         type=int, default=2)
     parser.add_argument('--model', '-m', default='random', required=True,
@@ -29,7 +30,10 @@ if __name__ == "__main__":
     elif args.model == 'trigram':
         model = MarkovLanguageModel(k=k)
     elif args.model == 'rnn':
-        model = RNNLanguageModel(k=k, mincount=2)
+        if args.embeddings:
+            model = RNNLanguageModel(k=k, mincount=2, lstm=128, ext_emb=args.embeddings)
+        else:
+            model = RNNLanguageModel(k=k, mincount=2)
     else:
         raise ValueError
 

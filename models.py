@@ -18,6 +18,7 @@ from keras.models import load_model
 from keras.callbacks import TensorBoard, EarlyStopping
 from smart_open import open
 import logging
+import gensim
 
 
 def tokenize(string):
@@ -192,7 +193,7 @@ class RNNLanguageModel:
     as a classification task (choose from all the words in the vocabulary).
     """
 
-    def __init__(self, k=2, lstm=16, emb_dim=5, batch_size=8, mincount=None):
+    def __init__(self, k=2, lstm=16, emb_dim=5, batch_size=8, ext_emb=None, mincount=None):
         backend.clear_session()
         logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
         self.k = k
@@ -205,6 +206,25 @@ class RNNLanguageModel:
         self.corpus_size = 0
         self.batch_size = batch_size
         self.mincount = mincount
+        self.ext_emb = ext_emb
+        self.ext_vectors = None
+        self.ext_vocab = None
+        if self.ext_emb:
+            external_embeddings = None
+            if ext_emb.endswith('.model'):
+                external_embeddings = gensim.models.KeyedVectors.load(ext_emb)
+            elif ext_emb.endswith('bin') or ext_emb.endswith('bin.gz'):
+                external_embeddings = gensim.models.KeyedVectors.load_word2vec_format(
+                    ext_emb, binary=True)
+            else:
+                print('Wrong file format for the external embedding file!', file=sys.stderr)
+                print('Please use either Gensim models or binary word2vec models', file=sys.stderr)
+                exit()
+            self.ext_vectors = external_embeddings.vectors
+            self.ext_vocab = external_embeddings.index2entity
+            self.ext_word_index = {}
+            for nr, word in enumerate(self.ext_vocab):
+                self.ext_word_index[word] = nr
 
     def train(self, strings):
         for string in strings:
@@ -224,16 +244,32 @@ class RNNLanguageModel:
                 self.corpus_size += 1
                 if nr < self.k:
                     continue
-                data = [string[nr - 2], string[nr - 1], token]
-                if all([word in self.inv_index for word in data]):
-                    encoded = [self.inv_index[w] for w in data]
-                    sequences.append(encoded)
+                if self.ext_emb:
+                    data = [string[nr - 2], string[nr - 1], token]
+                    if all([word in self.ext_word_index for word in data[:2]]) \
+                            and token in self.inv_index:
+                        encoded_context = [self.ext_word_index[w] for w in data[:2]]
+                        encoded_token = [self.inv_index[token]]
+                        encoded = encoded_context + encoded_token
+                        sequences.append(encoded)
+                else:
+                    data = [string[nr - 2], string[nr - 1], token]
+                    if all([word in self.inv_index for word in data]):
+                        encoded = [self.inv_index[w] for w in data]
+                        sequences.append(encoded)
         print('Total sequences to train on:', len(sequences), file=sys.stderr)
         sequences = np.array(sequences)
 
         # Describe the model architecture
         self.model = Sequential()
-        self.model.add(Embedding(vocab_size, self.embed, input_length=self.k, name='embeddings'))
+        if self.ext_emb:
+            weights = self.ext_vectors
+            # Take the weights from the Gensim model, freeze the layer
+            self.model.add(Embedding(weights.shape[0], weights.shape[1], weights=[weights],
+                                     input_length=self.k, trainable=False, name='embeddings'))
+        else:
+            self.model.add(Embedding(vocab_size, self.embed, input_length=self.k,
+                                     name='embeddings'))
         self.model.add(LSTM(self.rnn_size, name='LSTM'))
         self.model.add(Dense(vocab_size, activation='softmax', name='output'))
         print(self.model.summary(), file=sys.stderr)
@@ -297,30 +333,40 @@ class RNNLanguageModel:
                     inst_counter = 0
 
     def score(self, entity, context=None):
-        if entity in self.inv_index and all([word in self.inv_index for word in context]):
+        if self.ext_vocab:
+            context_vocab = self.ext_word_index  # if we use external word embeddings
+        else:
+            context_vocab = self.inv_index  # if we use only training corpus information
+
+        if entity in self.inv_index and all([word in context_vocab for word in context]):
             entity_id = self.inv_index[entity]
-            context_ids = np.array([[self.inv_index[w] for w in context]])
+            context_ids = np.array([[context_vocab[w] for w in context]])
         # Decreased probability for out-of-vocabulary words:
         else:
             return 1 / self.corpus_size
 
-        prediction = self.model.predict(context_ids).ravel()
-        probability = prediction[entity_id]
+        prediction = self.model.predict(context_ids).ravel()  # Probability distribution
+        probability = prediction[entity_id]  # Probability of the correct word
         return probability
 
     def generate(self, context=None):
-        if all([word in self.inv_index for word in context]):
-            context_ids = np.array([[self.inv_index[w] for w in context]])
-            prediction = self.model.predict(context_ids).ravel()
-            word_id = prediction.argmax()
-            word = self.word_index[word_id]
+        if self.ext_vocab:
+            context_vocab = self.ext_word_index  # if we use external word embeddings
+        else:
+            context_vocab = self.inv_index  # if we use only training corpus information
+
+        if all([word in context_vocab for word in context]):
+            context_ids = np.array([[context_vocab[w] for w in context]])
+            prediction = self.model.predict(context_ids).ravel()  # Probability distribution
+            word_id = prediction.argmax()  # Entry with the highest probability
+            word = self.word_index[word_id]  # Word corresponding to this entry
         else:
             word = np.random.choice(self.word_index)
         return word
 
     def save(self, filename):
         self.model.save(filename)
-        out_dump = [self.inv_index, self.corpus_size]
+        out_dump = [self.inv_index, self.corpus_size, self.ext_vocab]
         with open(filename.split('.')[0] + '.pickle.gz', 'wb') as out:
             pickle.dump(out_dump, out)
         print('Model saved to {} and {} (vocabulary)'.format(filename, filename.split('.')[0] +
@@ -330,7 +376,11 @@ class RNNLanguageModel:
         self.model = load_model(filename)
         voc_file = filename.split('.')[0] + '.pickle.gz'
         with open(voc_file, 'rb') as f:
-            self.inv_index, self.corpus_size = pickle.load(f)
+            self.inv_index, self.corpus_size, self.ext_vocab = pickle.load(f)
         self.word_index = sorted(self.inv_index, key=self.inv_index.get)
+        if self.ext_vocab:
+            self.ext_word_index = {}
+            for nr, word in enumerate(self.ext_vocab):
+                self.ext_word_index[word] = nr
         print('Model loaded from {} and {}'.format(filename, voc_file), file=sys.stderr)
         print(self.model.summary(), file=sys.stderr)

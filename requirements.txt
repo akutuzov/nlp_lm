@@ -3,3 +3,4 @@ tensorflow > 1.10
 keras > 2.2
 smart_open > 1.8.1
 matplotlib
+gensim >= 3.4
